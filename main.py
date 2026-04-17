@@ -14,8 +14,8 @@ app.add_middleware(
 )
 
 # 🔑 PUT YOUR KEYS HERE
-API_KEY = "PASTE_YOUR_API_KEY"
-API_SECRET = "PASTE_YOUR_API_SECRET"
+API_KEY = "v4se78490za52f7m"
+API_SECRET = "hestwv676imoo7wcf443vmj70s7muhzr"
 
 kite = KiteConnect(api_key=API_KEY)
 
