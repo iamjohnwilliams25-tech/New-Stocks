@@ -11,12 +11,13 @@ def get_stocks():
     
     for s in stocks:
         try:
-            df = yf.download(s, period="10d", interval="1d")
+            ticker = yf.Ticker(s)
+            hist = ticker.history(period="5d")
             
-            if df.empty:
+            if hist.empty:
                 continue
-                
-            price = float(df["Close"].iloc[-1])
+            
+            price = float(hist["Close"].iloc[-1])
             
             data.append({
                 "stock": s.replace(".NS",""),
