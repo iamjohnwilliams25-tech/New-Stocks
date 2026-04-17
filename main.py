@@ -13,7 +13,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 🔴 PUT YOUR KEYS HERE (TEMPORARY)
+# 🔴 PUT YOUR REAL KEYS HERE
 API_KEY = "v4se78490za52f7m"
 API_SECRET = "hestwv676imoo7wcf443vmj70s7muhzr"
 ACCESS_TOKEN = "FuPaS2aQ5rxXNP1BRoB80IGIy7OWYqIS"
@@ -24,57 +24,98 @@ kite.set_access_token(ACCESS_TOKEN)
 @app.get("/stocks")
 def get_stocks():
     try:
-        instruments = [
-            "NSE:RELIANCE","NSE:HDFCBANK","NSE:ICICIBANK","NSE:TATAMOTORS","NSE:SBIN",
-            "NSE:AXISBANK","NSE:KOTAKBANK","NSE:LT","NSE:MARUTI","NSE:BAJFINANCE",
-            "NSE:HCLTECH","NSE:WIPRO","NSE:ULTRACEMCO","NSE:ASIANPAINT","NSE:TITAN",
-            "NSE:SUNPHARMA","NSE:ONGC","NSE:NTPC","NSE:POWERGRID","NSE:ADANIENT",
-            "NSE:ADANIPORTS","NSE:COALINDIA","NSE:BPCL","NSE:IOC","NSE:TECHM",
-            "NSE:DRREDDY","NSE:CIPLA","NSE:DIVISLAB","NSE:HEROMOTOCO","NSE:BAJAJFINSV",
-            "NSE:INDUSINDBK","NSE:EICHERMOT","NSE:GRASIM","NSE:JSWSTEEL","NSE:TATASTEEL",
-            "NSE:UPL","NSE:BRITANNIA","NSE:NESTLEIND","NSE:HINDUNILVR","NSE:ITC",
-            "NSE:PIDILITIND","NSE:DABUR","NSE:GODREJCP","NSE:COLPAL","NSE:BERGEPAINT",
-            "NSE:AMBUJACEM","NSE:SHREECEM","NSE:ACC","NSE:DLF","NSE:LODHA"
+        stocks = [
+            {"symbol": "NSE:HDFCBANK", "sector": "Banking"},
+            {"symbol": "NSE:ICICIBANK", "sector": "Banking"},
+            {"symbol": "NSE:SBIN", "sector": "Banking"},
+            {"symbol": "NSE:AXISBANK", "sector": "Banking"},
+
+            {"symbol": "NSE:INFY", "sector": "IT"},
+            {"symbol": "NSE:TCS", "sector": "IT"},
+            {"symbol": "NSE:WIPRO", "sector": "IT"},
+            {"symbol": "NSE:HCLTECH", "sector": "IT"},
+
+            {"symbol": "NSE:RELIANCE", "sector": "Energy"},
+            {"symbol": "NSE:ONGC", "sector": "Energy"},
+            {"symbol": "NSE:BPCL", "sector": "Energy"},
+            {"symbol": "NSE:IOC", "sector": "Energy"},
+
+            {"symbol": "NSE:TATAMOTORS", "sector": "Auto"},
+            {"symbol": "NSE:HEROMOTOCO", "sector": "Auto"},
+            {"symbol": "NSE:EICHERMOT", "sector": "Auto"},
+
+            {"symbol": "NSE:ITC", "sector": "FMCG"},
+            {"symbol": "NSE:DABUR", "sector": "FMCG"},
+            {"symbol": "NSE:BRITANNIA", "sector": "FMCG"},
+
+            {"symbol": "NSE:SUNPHARMA", "sector": "Pharma"},
+            {"symbol": "NSE:CIPLA", "sector": "Pharma"},
+            {"symbol": "NSE:DRREDDY", "sector": "Pharma"},
         ]
 
-        quotes = kite.ltp(instruments)
-
         result = []
+
         today = datetime.date.today()
-        suggested_date = today + datetime.timedelta(days=3)
+        from_date = today - datetime.timedelta(days=15)
 
-        for key, value in quotes.items():
-            price = value["last_price"]
+        for s in stocks:
+            symbol = s["symbol"]
+            sector = s["sector"]
 
-            # 🔥 REAL TREND (simple % based on price ranges)
-            trend = round((price * 0.01), 2)  # temporary dynamic %
+            try:
+                # 🔥 GET HISTORICAL DATA (REAL TREND)
+                hist = kite.historical_data(
+                    instrument_token=kite.ltp(symbol)[symbol]["instrument_token"],
+                    from_date=from_date,
+                    to_date=today,
+                    interval="day"
+                )
 
-            # better logic
-            if trend > 15:
-                suggestion = "BUY"
-                confidence = "High"
-            elif trend > 5:
-                suggestion = "BUY (Weak)"
-                confidence = "Medium"
-            else:
-                suggestion = "SELL"
-                confidence = "Low"
+                if len(hist) < 5:
+                    continue
 
-            result.append({
-                "stock": key.replace("NSE:", ""),
-                "current_price": price,
-                "buy_price": round(price * 1.01, 2),
-                "target": round(price * 1.05, 2),
-                "stop_loss": round(price * 0.97, 2),
-                "change_10d": trend,
-                "buy_date": str(today),
-                "target_date": str(suggested_date),
-                "expected_days": "2-4",
-                "suggestion": suggestion,
-                "confidence": confidence
-            })
+                old_price = hist[0]["close"]
+                latest_price = hist[-1]["close"]
 
-        # sort best first
+                change = ((latest_price - old_price) / old_price) * 100
+
+                # 🔥 FILTER PRICE < 1500
+                if latest_price > 1500:
+                    continue
+
+                # 🔥 SMART SIGNAL
+                if change > 5:
+                    suggestion = "BUY"
+                    confidence = "High"
+                    days = "2-4"
+                elif change > 1:
+                    suggestion = "BUY (Weak)"
+                    confidence = "Medium"
+                    days = "3-5"
+                else:
+                    suggestion = "SELL"
+                    confidence = "Low"
+                    days = "-"
+
+                result.append({
+                    "stock": symbol.replace("NSE:", ""),
+                    "sector": sector,
+                    "current_price": round(latest_price, 2),
+                    "buy_price": round(latest_price * 1.01, 2),
+                    "target": round(latest_price * 1.05, 2),
+                    "stop_loss": round(latest_price * 0.97, 2),
+                    "change_10d": round(change, 2),
+                    "buy_date": str(today),
+                    "target_date": str(today + datetime.timedelta(days=3)),
+                    "expected_days": days,
+                    "suggestion": suggestion,
+                    "confidence": confidence
+                })
+
+            except:
+                continue
+
+        # 🔥 SORT BEST FIRST
         result = sorted(result, key=lambda x: x["change_10d"], reverse=True)
 
         return result
