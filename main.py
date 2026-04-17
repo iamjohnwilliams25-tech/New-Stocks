@@ -5,7 +5,6 @@ import time
 
 app = FastAPI()
 
-# CORS (IMPORTANT for WordPress)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -14,16 +13,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Stock list (you can expand to 100+ later)
 stocks = [
     "RELIANCE.NS","HDFCBANK.NS","ICICIBANK.NS","TATAMOTORS.NS","INFY.NS","SBIN.NS",
-    "AXISBANK.NS","KOTAKBANK.NS","LT.NS","MARUTI.NS","BAJFINANCE.NS","HCLTECH.NS",
-    "WIPRO.NS","ULTRACEMCO.NS","ASIANPAINT.NS","TITAN.NS","SUNPHARMA.NS",
-    "ONGC.NS","NTPC.NS","POWERGRID.NS","ADANIENT.NS","ADANIPORTS.NS",
-    "COALINDIA.NS","BPCL.NS","IOC.NS","TECHM.NS","DRREDDY.NS","CIPLA.NS"
+    "AXISBANK.NS","KOTAKBANK.NS","LT.NS","MARUTI.NS","BAJFINANCE.NS","HCLTECH.NS"
 ]
 
-# Cache system
 cache_data = []
 last_updated = 0
 
@@ -31,8 +25,8 @@ last_updated = 0
 def get_stocks():
     global cache_data, last_updated
 
-    # refresh every 5 minutes
-    if time.time() - last_updated < 300:
+    # Return cached data if fresh
+    if time.time() - last_updated < 300 and cache_data:
         return cache_data
 
     result = []
@@ -50,7 +44,6 @@ def get_stocks():
 
             change = ((price - old_price) / old_price) * 100
 
-            # Trading logic
             if change > 5:
                 suggestion = "BUY"
                 confidence = "High"
@@ -75,11 +68,16 @@ def get_stocks():
                 "confidence": confidence
             })
 
+            time.sleep(0.5)  # 🔥 prevents rate limit crash
+
         except Exception as e:
             print("Error:", s, e)
             continue
 
-    # Sort best stocks first
+    # If nothing fetched → return old cache instead of crashing
+    if not result and cache_data:
+        return cache_data
+
     result = sorted(result, key=lambda x: x["change_10d"], reverse=True)
 
     cache_data = result
