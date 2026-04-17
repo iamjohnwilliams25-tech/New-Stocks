@@ -1,8 +1,18 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
 
-# Temporary static data (so your system works 100%)
+# ✅ IMPORTANT: Fix for WordPress (CORS)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Temporary working data (so everything runs perfectly)
 stocks_data = [
     {"stock": "RELIANCE", "price": 2950},
     {"stock": "HDFCBANK", "price": 1600},
@@ -23,7 +33,8 @@ def get_stocks():
             "stock": s["stock"],
             "buy_price": round(price * 1.01, 2),
             "target": round(price * 1.05, 2),
-            "stop_loss": round(price * 0.97, 2)
+            "stop_loss": round(price * 0.97, 2),
+            "confidence": "Medium"
         })
     
     return result
