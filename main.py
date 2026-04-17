@@ -1,9 +1,11 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+import yfinance as yf
+import time
 
 app = FastAPI()
 
-# ✅ IMPORTANT: Fix for WordPress (CORS)
+# CORS (IMPORTANT for WordPress)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -12,29 +14,75 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Temporary working data (so everything runs perfectly)
-stocks_data = [
-    {"stock": "RELIANCE", "price": 2950},
-    {"stock": "HDFCBANK", "price": 1600},
-    {"stock": "ICICIBANK", "price": 1050},
-    {"stock": "TATAMOTORS", "price": 950},
-    {"stock": "INFY", "price": 1500},
-    {"stock": "SBIN", "price": 800}
+# Stock list (you can expand to 100+ later)
+stocks = [
+    "RELIANCE.NS","HDFCBANK.NS","ICICIBANK.NS","TATAMOTORS.NS","INFY.NS","SBIN.NS",
+    "AXISBANK.NS","KOTAKBANK.NS","LT.NS","MARUTI.NS","BAJFINANCE.NS","HCLTECH.NS",
+    "WIPRO.NS","ULTRACEMCO.NS","ASIANPAINT.NS","TITAN.NS","SUNPHARMA.NS",
+    "ONGC.NS","NTPC.NS","POWERGRID.NS","ADANIENT.NS","ADANIPORTS.NS",
+    "COALINDIA.NS","BPCL.NS","IOC.NS","TECHM.NS","DRREDDY.NS","CIPLA.NS"
 ]
+
+# Cache system
+cache_data = []
+last_updated = 0
 
 @app.get("/stocks")
 def get_stocks():
+    global cache_data, last_updated
+
+    # refresh every 5 minutes
+    if time.time() - last_updated < 300:
+        return cache_data
+
     result = []
-    
-    for s in stocks_data:
-        price = s["price"]
-        
-        result.append({
-            "stock": s["stock"],
-            "buy_price": round(price * 1.01, 2),
-            "target": round(price * 1.05, 2),
-            "stop_loss": round(price * 0.97, 2),
-            "confidence": "Medium"
-        })
-    
+
+    for s in stocks:
+        try:
+            ticker = yf.Ticker(s)
+            hist = ticker.history(period="10d")
+
+            if hist.empty or len(hist) < 2:
+                continue
+
+            price = float(hist["Close"].iloc[-1])
+            old_price = float(hist["Close"].iloc[0])
+
+            change = ((price - old_price) / old_price) * 100
+
+            # Trading logic
+            if change > 5:
+                suggestion = "BUY"
+                confidence = "High"
+                days = "2-4"
+            elif change > 0:
+                suggestion = "BUY (Weak)"
+                confidence = "Medium"
+                days = "3-5"
+            else:
+                suggestion = "SELL"
+                confidence = "Low"
+                days = "-"
+
+            result.append({
+                "stock": s.replace(".NS",""),
+                "buy_price": round(price * 1.01, 2),
+                "target": round(price * 1.05, 2),
+                "stop_loss": round(price * 0.97, 2),
+                "change_10d": round(change, 2),
+                "expected_days": days,
+                "suggestion": suggestion,
+                "confidence": confidence
+            })
+
+        except Exception as e:
+            print("Error:", s, e)
+            continue
+
+    # Sort best stocks first
+    result = sorted(result, key=lambda x: x["change_10d"], reverse=True)
+
+    cache_data = result
+    last_updated = time.time()
+
     return result
