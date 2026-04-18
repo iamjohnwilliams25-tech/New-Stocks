@@ -1,29 +1,42 @@
 from fastapi import FastAPI
 from fastapi.responses import RedirectResponse
+from fastapi.middleware.cors import CORSMiddleware
 from kiteconnect import KiteConnect
 import datetime
 
 app = FastAPI()
 
+# 🔐 ALLOW YOUR WEBSITE
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # you can later restrict to your domain
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# 🔑 YOUR KEYS
 API_KEY = "v4se78490za52f7m"
 API_SECRET = "hestwv676imoo7wcf443vmj70s7muhzr"
 
 kite = KiteConnect(api_key=API_KEY)
 
-# 🔥 store token globally
 ACCESS_TOKEN = None
 
 
-# ✅ LOGIN BUTTON
+# 🔵 LOGIN
 @app.get("/login")
 def login():
     return RedirectResponse(kite.login_url())
 
 
-# ✅ AUTO CALLBACK (NO USER ACTION NEEDED)
+# 🔵 CALLBACK
 @app.get("/callback")
-def callback(request_token: str):
+def callback(request_token: str = None):
     global ACCESS_TOKEN
+
+    if not request_token:
+        return {"error": "Missing request_token"}
 
     data = kite.generate_session(request_token, api_secret=API_SECRET)
     ACCESS_TOKEN = data["access_token"]
@@ -33,56 +46,38 @@ def callback(request_token: str):
     return RedirectResponse("https://stocks.ofesto.com/?login=success")
 
 
-# ✅ STOCK API
+# 🔵 STOCK DATA
 @app.get("/stocks")
 def get_stocks():
     global ACCESS_TOKEN
 
     if not ACCESS_TOKEN:
-        return {"error": "Please click Login first"}
+        return {"error": "Please login first"}
 
     try:
-        stocks = [
-            {"symbol": "NSE:HDFCBANK", "sector": "Banking"},
-            {"symbol": "NSE:ICICIBANK", "sector": "Banking"},
-            {"symbol": "NSE:SBIN", "sector": "Banking"},
-            {"symbol": "NSE:AXISBANK", "sector": "Banking"},
-
-            {"symbol": "NSE:INFY", "sector": "IT"},
-            {"symbol": "NSE:WIPRO", "sector": "IT"},
-            {"symbol": "NSE:TCS", "sector": "IT"},
-
-            {"symbol": "NSE:RELIANCE", "sector": "Energy"},
-            {"symbol": "NSE:ONGC", "sector": "Energy"},
-            {"symbol": "NSE:BPCL", "sector": "Energy"},
-
-            {"symbol": "NSE:TATAMOTORS", "sector": "Auto"},
-            {"symbol": "NSE:HEROMOTOCO", "sector": "Auto"},
-
-            {"symbol": "NSE:ITC", "sector": "FMCG"},
-            {"symbol": "NSE:DABUR", "sector": "FMCG"},
-
-            {"symbol": "NSE:SUNPHARMA", "sector": "Pharma"},
-            {"symbol": "NSE:CIPLA", "sector": "Pharma"},
+        symbols = [
+            "NSE:HDFCBANK","NSE:ICICIBANK","NSE:SBIN","NSE:AXISBANK",
+            "NSE:INFY","NSE:TCS","NSE:WIPRO",
+            "NSE:RELIANCE","NSE:ONGC","NSE:BPCL",
+            "NSE:TATAMOTORS","NSE:HEROMOTOCO",
+            "NSE:ITC","NSE:DABUR",
+            "NSE:SUNPHARMA","NSE:CIPLA"
         ]
 
         result = []
         today = datetime.date.today()
         from_date = today - datetime.timedelta(days=10)
 
-        for s in stocks:
-            symbol = s["symbol"]
-            sector = s["sector"]
-
+        for symbol in symbols:
             try:
-                ltp_data = kite.ltp(symbol)
-                price = ltp_data[symbol]["last_price"]
+                ltp = kite.ltp(symbol)
+                price = ltp[symbol]["last_price"]
 
                 hist = kite.historical_data(
-                    instrument_token=ltp_data[symbol]["instrument_token"],
-                    from_date=from_date,
-                    to_date=today,
-                    interval="day"
+                    ltp[symbol]["instrument_token"],
+                    from_date,
+                    today,
+                    "day"
                 )
 
                 if len(hist) < 2:
@@ -93,32 +88,24 @@ def get_stocks():
 
                 change = ((latest_price - old_price) / old_price) * 100
 
-                if latest_price > 1500:
-                    continue
-
                 if change > 5:
-                    suggestion = "BUY"
-                    confidence = "High"
+                    signal = "BUY"
                 elif change > 1:
-                    suggestion = "BUY (Weak)"
-                    confidence = "Medium"
+                    signal = "BUY (Weak)"
                 else:
-                    suggestion = "SELL"
-                    confidence = "Low"
+                    signal = "SELL"
 
                 result.append({
                     "stock": symbol.replace("NSE:", ""),
-                    "sector": sector,
                     "price": round(latest_price, 2),
-                    "trend_10d": round(change, 2),
-                    "suggestion": suggestion,
-                    "confidence": confidence
+                    "trend": round(change, 2),
+                    "signal": signal
                 })
 
             except:
                 continue
 
-        return sorted(result, key=lambda x: x["trend_10d"], reverse=True)
+        return result
 
     except Exception as e:
         return {"error": str(e)}
