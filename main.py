@@ -5,23 +5,22 @@ import datetime
 
 app = FastAPI()
 
-# 🔑 YOUR KEYS
 API_KEY = "v4se78490za52f7m"
 API_SECRET = "hestwv676imoo7wcf443vmj70s7muhzr"
 
 kite = KiteConnect(api_key=API_KEY)
 
-# 🔁 store token in memory
+# 🔥 store token globally
 ACCESS_TOKEN = None
 
 
-# ✅ STEP 1: LOGIN BUTTON
+# ✅ LOGIN BUTTON
 @app.get("/login")
 def login():
     return RedirectResponse(kite.login_url())
 
 
-# ✅ STEP 2: CALLBACK (AUTO TOKEN CAPTURE)
+# ✅ AUTO CALLBACK (NO USER ACTION NEEDED)
 @app.get("/callback")
 def callback(request_token: str):
     global ACCESS_TOKEN
@@ -31,19 +30,16 @@ def callback(request_token: str):
 
     kite.set_access_token(ACCESS_TOKEN)
 
-    return {
-        "message": "Login successful ✅",
-        "status": "You can now open /stocks"
-    }
+    return RedirectResponse("https://stocks.ofesto.com/?login=success")
 
 
-# ✅ STOCK DATA
+# ✅ STOCK API
 @app.get("/stocks")
 def get_stocks():
     global ACCESS_TOKEN
 
     if not ACCESS_TOKEN:
-        return {"error": "Please login first using /login"}
+        return {"error": "Please click Login first"}
 
     try:
         stocks = [
@@ -53,8 +49,8 @@ def get_stocks():
             {"symbol": "NSE:AXISBANK", "sector": "Banking"},
 
             {"symbol": "NSE:INFY", "sector": "IT"},
-            {"symbol": "NSE:TCS", "sector": "IT"},
             {"symbol": "NSE:WIPRO", "sector": "IT"},
+            {"symbol": "NSE:TCS", "sector": "IT"},
 
             {"symbol": "NSE:RELIANCE", "sector": "Energy"},
             {"symbol": "NSE:ONGC", "sector": "Energy"},
