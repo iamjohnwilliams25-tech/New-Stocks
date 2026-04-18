@@ -1,40 +1,50 @@
 from fastapi import FastAPI
+from fastapi.responses import RedirectResponse
 from kiteconnect import KiteConnect
 import datetime
 
 app = FastAPI()
 
-# 🔴 PASTE YOUR KEYS HERE
+# 🔑 YOUR KEYS
 API_KEY = "v4se78490za52f7m"
 API_SECRET = "hestwv676imoo7wcf443vmj70s7muhzr"
-ACCESS_TOKEN = "FuPaS2aQ5rxXNP1BRoB80IGIy7OWYqIS"
 
 kite = KiteConnect(api_key=API_KEY)
 
-# Set access token only if available
-if ACCESS_TOKEN != "PASTE_DAILY_ACCESS_TOKEN":
-    kite.set_access_token(ACCESS_TOKEN)
+# 🔁 store token in memory
+ACCESS_TOKEN = None
 
-# ✅ HOME
-@app.get("/")
-def home():
-    return {"message": "API running"}
 
-# ✅ LOGIN URL
+# ✅ STEP 1: LOGIN BUTTON
 @app.get("/login")
 def login():
-    return {"login_url": kite.login_url()}
+    return RedirectResponse(kite.login_url())
 
-# ✅ GENERATE TOKEN
-@app.get("/generate-token")
-def generate_token(request_token: str):
+
+# ✅ STEP 2: CALLBACK (AUTO TOKEN CAPTURE)
+@app.get("/callback")
+def callback(request_token: str):
+    global ACCESS_TOKEN
+
     data = kite.generate_session(request_token, api_secret=API_SECRET)
-    access_token = data["access_token"]
-    return {"access_token": access_token}
+    ACCESS_TOKEN = data["access_token"]
+
+    kite.set_access_token(ACCESS_TOKEN)
+
+    return {
+        "message": "Login successful ✅",
+        "status": "You can now open /stocks"
+    }
+
 
 # ✅ STOCK DATA
 @app.get("/stocks")
 def get_stocks():
+    global ACCESS_TOKEN
+
+    if not ACCESS_TOKEN:
+        return {"error": "Please login first using /login"}
+
     try:
         stocks = [
             {"symbol": "NSE:HDFCBANK", "sector": "Banking"},
@@ -72,11 +82,6 @@ def get_stocks():
                 ltp_data = kite.ltp(symbol)
                 price = ltp_data[symbol]["last_price"]
 
-                # ❗ Skip if no token set
-                if not kite.access_token:
-                    return {"error": "Access token missing"}
-
-                # 🔥 Get historical data
                 hist = kite.historical_data(
                     instrument_token=ltp_data[symbol]["instrument_token"],
                     from_date=from_date,
@@ -92,11 +97,9 @@ def get_stocks():
 
                 change = ((latest_price - old_price) / old_price) * 100
 
-                # 🔥 Filter <1500
                 if latest_price > 1500:
                     continue
 
-                # 🔥 Signal logic
                 if change > 5:
                     suggestion = "BUY"
                     confidence = "High"
@@ -110,13 +113,8 @@ def get_stocks():
                 result.append({
                     "stock": symbol.replace("NSE:", ""),
                     "sector": sector,
-                    "current_price": round(latest_price, 2),
-                    "buy_price": round(latest_price * 1.01, 2),
-                    "target": round(latest_price * 1.05, 2),
-                    "stop_loss": round(latest_price * 0.97, 2),
-                    "change_10d": round(change, 2),
-                    "buy_date": str(today),
-                    "target_date": str(today + datetime.timedelta(days=3)),
+                    "price": round(latest_price, 2),
+                    "trend_10d": round(change, 2),
                     "suggestion": suggestion,
                     "confidence": confidence
                 })
@@ -124,7 +122,7 @@ def get_stocks():
             except:
                 continue
 
-        return result
+        return sorted(result, key=lambda x: x["trend_10d"], reverse=True)
 
     except Exception as e:
         return {"error": str(e)}
