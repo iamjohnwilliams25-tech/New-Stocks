@@ -15,28 +15,26 @@ ACCESS_TOKEN = None
 kite = KiteConnect(api_key=API_KEY)
 
 # ============================
-# 📊 STOCK LIST (50+ STOCKS)
+# 📊 FIXED STOCK TOKENS (STABLE)
 # ============================
-symbols = [
-"NSE:HDFCBANK","NSE:ICICIBANK","NSE:SBIN","NSE:AXISBANK","NSE:INDUSINDBK",
-"NSE:KOTAKBANK","NSE:CANBK","NSE:PNB","NSE:BANKBARODA","NSE:FEDERALBNK",
-
-"NSE:INFY","NSE:TCS","NSE:WIPRO","NSE:HCLTECH","NSE:TECHM",
-
-"NSE:RELIANCE","NSE:ONGC","NSE:BPCL","NSE:IOC",
-
-"NSE:TATAMOTORS","NSE:HEROMOTOCO","NSE:BAJAJ-AUTO","NSE:ASHOKLEY",
-
-"NSE:ITC","NSE:DABUR","NSE:HINDUNILVR","NSE:MARICO",
-
-"NSE:SUNPHARMA","NSE:CIPLA","NSE:DRREDDY","NSE:LUPIN",
-
-"NSE:COALINDIA","NSE:NTPC","NSE:POWERGRID",
-
-"NSE:ADANIPORTS","NSE:ADANIENT",
-
-"NSE:ZOMATO","NSE:PAYTM","NSE:NYKAA"
-]
+stocks = {
+    "HDFCBANK": 1333,
+    "ICICIBANK": 4963,
+    "SBIN": 779521,
+    "AXISBANK": 1510401,
+    "INFY": 408065,
+    "TCS": 2953217,
+    "WIPRO": 969473,
+    "RELIANCE": 738561,
+    "ITC": 424961,
+    "ONGC": 633601,
+    "TATAMOTORS": 884737,
+    "SUNPHARMA": 857857,
+    "CIPLA": 177665,
+    "NTPC": 2977281,
+    "POWERGRID": 3834113,
+    "COALINDIA": 5215745
+}
 
 # ============================
 # 🏠 HOME
@@ -86,11 +84,8 @@ def get_stocks():
 
     results = []
 
-    for symbol in symbols:
+    for name, token in stocks.items():
         try:
-            ltp_data = kite.ltp(symbol)
-            token = ltp_data[symbol]["instrument_token"]
-
             data = kite.historical_data(
                 token,
                 datetime.now() - timedelta(days=15),
@@ -110,19 +105,16 @@ def get_stocks():
             change = ((latest - old) / old) * 100
             high_10 = max(highs[:-1])
 
-            # 📊 CATEGORY LOGIC
+            # 📊 CATEGORY
             if change > 3 and latest >= high_10 * 0.95:
                 signal = "TOP BUY"
                 confidence = "High"
-
             elif change > 1.5:
                 signal = "MEDIUM BUY"
                 confidence = "Medium"
-
             elif change > 0:
                 signal = "AVERAGE"
                 confidence = "Low"
-
             else:
                 signal = "LOW / AVOID"
                 confidence = "Very Low"
@@ -131,7 +123,7 @@ def get_stocks():
             stop_loss = latest * 0.95
 
             results.append({
-                "stock": symbol.replace("NSE:", ""),
+                "stock": name,
                 "price": round(latest, 2),
                 "trend": round(change, 2),
                 "target": round(target, 2),
@@ -141,7 +133,8 @@ def get_stocks():
                 "confidence": confidence
             })
 
-        except:
+        except Exception as e:
+            print("Error:", name, e)
             continue
 
     results = sorted(results, key=lambda x: x["trend"], reverse=True)
@@ -149,5 +142,5 @@ def get_stocks():
     return {
         "time": str(datetime.now()),
         "count": len(results),
-        "data": results[:50]
+        "data": results
     }
