@@ -2,7 +2,6 @@ from fastapi import FastAPI, Request
 from fastapi.responses import RedirectResponse
 from kiteconnect import KiteConnect
 from datetime import datetime, timedelta
-import os
 
 app = FastAPI()
 
@@ -11,19 +10,9 @@ API_SECRET = "hestwv676imoo7wcf443vmj70s7muhzr"
 
 kite = KiteConnect(api_key=API_KEY)
 
-TOKEN_FILE = "access_token.txt"
+# ✅ STORE TOKEN HERE (IN MEMORY)
+ACCESS_TOKEN = None
 
-def save_token(token):
-    with open(TOKEN_FILE, "w") as f:
-        f.write(token)
-
-def load_token():
-    if os.path.exists(TOKEN_FILE):
-        with open(TOKEN_FILE, "r") as f:
-            return f.read().strip()
-    return None
-
-# ✅ SIMPLE TEST STOCKS
 stocks = {
     "RELIANCE": 738561,
     "INFY": 408065,
@@ -41,6 +30,8 @@ def login():
 
 @app.get("/callback")
 def callback(request: Request):
+    global ACCESS_TOKEN
+
     request_token = request.query_params.get("request_token")
 
     if not request_token:
@@ -48,28 +39,23 @@ def callback(request: Request):
 
     try:
         data = kite.generate_session(request_token, api_secret=API_SECRET)
-        access_token = data["access_token"]
+        ACCESS_TOKEN = data["access_token"]
 
-        kite.set_access_token(access_token)
-        save_token(access_token)
+        kite.set_access_token(ACCESS_TOKEN)
 
-        return {"message": "Login success"}
+        return {"message": "Login success - token saved"}
 
     except Exception as e:
         return {"error": str(e)}
 
 @app.get("/stocks")
 def get_stocks():
+    global ACCESS_TOKEN
 
-    token = load_token()
+    if not ACCESS_TOKEN:
+        return {"error": "TOKEN NOT FOUND - LOGIN AGAIN"}
 
-    if not token:
-        return {"error": "NO TOKEN - LOGIN REQUIRED"}
-
-    try:
-        kite.set_access_token(token)
-    except Exception as e:
-        return {"error": "TOKEN ERROR: " + str(e)}
+    kite.set_access_token(ACCESS_TOKEN)
 
     results = []
 
@@ -95,13 +81,6 @@ def get_stocks():
 
         except Exception as e:
             print("ERROR:", name, e)
-
-    # 🔥 FALLBACK (VERY IMPORTANT)
-    if len(results) == 0:
-        return {
-            "error": "API FAILED",
-            "debug": "Token exists but data fetch failed"
-        }
 
     return {
         "count": len(results),
