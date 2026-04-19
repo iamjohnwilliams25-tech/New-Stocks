@@ -2,20 +2,35 @@ from fastapi import FastAPI, Request
 from fastapi.responses import RedirectResponse
 from kiteconnect import KiteConnect
 from datetime import datetime, timedelta
+import os
 
 app = FastAPI()
 
 # ============================
-# 🔐 ADD YOUR KEYS HERE
+# 🔐 YOUR KEYS
 # ============================
 API_KEY = "v4se78490za52f7m"
 API_SECRET = "hestwv676imoo7wcf443vmj70s7muhzr"
 
-ACCESS_TOKEN = None
 kite = KiteConnect(api_key=API_KEY)
 
 # ============================
-# 📊 FIXED STOCK TOKENS (STABLE)
+# 🔐 TOKEN STORAGE (FILE)
+# ============================
+TOKEN_FILE = "access_token.txt"
+
+def save_token(token):
+    with open(TOKEN_FILE, "w") as f:
+        f.write(token)
+
+def load_token():
+    if os.path.exists(TOKEN_FILE):
+        with open(TOKEN_FILE, "r") as f:
+            return f.read().strip()
+    return None
+
+# ============================
+# 📊 STOCK TOKENS (STABLE)
 # ============================
 stocks = {
     "HDFCBANK": 1333,
@@ -41,7 +56,7 @@ stocks = {
 # ============================
 @app.get("/")
 def home():
-    return {"status": "API Running"}
+    return {"status": "running"}
 
 # ============================
 # 🔐 LOGIN
@@ -55,8 +70,6 @@ def login():
 # ============================
 @app.get("/callback")
 def callback(request: Request):
-    global ACCESS_TOKEN
-
     request_token = request.query_params.get("request_token")
 
     if not request_token:
@@ -64,8 +77,10 @@ def callback(request: Request):
 
     try:
         data = kite.generate_session(request_token, api_secret=API_SECRET)
-        ACCESS_TOKEN = data["access_token"]
-        kite.set_access_token(ACCESS_TOKEN)
+        access_token = data["access_token"]
+
+        kite.set_access_token(access_token)
+        save_token(access_token)
 
         return RedirectResponse("https://stocks.ofesto.com/?login=success")
 
@@ -73,14 +88,17 @@ def callback(request: Request):
         return {"error": str(e)}
 
 # ============================
-# 📊 STOCK API
+# 📊 STOCK DATA
 # ============================
 @app.get("/stocks")
 def get_stocks():
-    global ACCESS_TOKEN
 
-    if not ACCESS_TOKEN:
-        return {"error": "Please login first"}
+    access_token = load_token()
+
+    if not access_token:
+        return {"error": "Login required"}
+
+    kite.set_access_token(access_token)
 
     results = []
 
@@ -105,7 +123,6 @@ def get_stocks():
             change = ((latest - old) / old) * 100
             high_10 = max(highs[:-1])
 
-            # 📊 CATEGORY
             if change > 3 and latest >= high_10 * 0.95:
                 signal = "TOP BUY"
                 confidence = "High"
@@ -133,8 +150,7 @@ def get_stocks():
                 "confidence": confidence
             })
 
-        except Exception as e:
-            print("Error:", name, e)
+        except:
             continue
 
     results = sorted(results, key=lambda x: x["trend"], reverse=True)
