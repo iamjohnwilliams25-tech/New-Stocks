@@ -2,6 +2,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import RedirectResponse
 from kiteconnect import KiteConnect
 from datetime import datetime, timedelta
+import os
 
 app = FastAPI()
 
@@ -9,9 +10,6 @@ API_KEY = "v4se78490za52f7m"
 API_SECRET = "hestwv676imoo7wcf443vmj70s7muhzr"
 
 kite = KiteConnect(api_key=API_KEY)
-
-# ✅ STORE TOKEN HERE (IN MEMORY)
-ACCESS_TOKEN = None
 
 stocks = {
     "RELIANCE": 738561,
@@ -30,8 +28,6 @@ def login():
 
 @app.get("/callback")
 def callback(request: Request):
-    global ACCESS_TOKEN
-
     request_token = request.query_params.get("request_token")
 
     if not request_token:
@@ -39,23 +35,25 @@ def callback(request: Request):
 
     try:
         data = kite.generate_session(request_token, api_secret=API_SECRET)
-        ACCESS_TOKEN = data["access_token"]
+        access_token = data["access_token"]
 
-        kite.set_access_token(ACCESS_TOKEN)
+        # ✅ SAVE TO ENV (TEMP)
+        os.environ["ACCESS_TOKEN"] = access_token
 
-        return {"message": "Login success - token saved"}
+        return {"message": "Login success"}
 
     except Exception as e:
         return {"error": str(e)}
 
 @app.get("/stocks")
 def get_stocks():
-    global ACCESS_TOKEN
 
-    if not ACCESS_TOKEN:
-        return {"error": "TOKEN NOT FOUND - LOGIN AGAIN"}
+    access_token = os.environ.get("ACCESS_TOKEN")
 
-    kite.set_access_token(ACCESS_TOKEN)
+    if not access_token:
+        return {"error": "TOKEN MISSING - LOGIN AGAIN"}
+
+    kite.set_access_token(access_token)
 
     results = []
 
@@ -75,8 +73,7 @@ def get_stocks():
 
             results.append({
                 "stock": name,
-                "price": latest,
-                "signal": "WORKING"
+                "price": latest
             })
 
         except Exception as e:
