@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 
 app = FastAPI()
 
-# ✅ CORS FIX (VERY IMPORTANT)
+# ✅ CORS (IMPORTANT)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -21,10 +21,10 @@ API_SECRET = "hestwv676imoo7wcf443vmj70s7muhzr"
 
 kite = KiteConnect(api_key=API_KEY)
 
-# 🔑 TOKEN (SESSION BASED)
+# 🔑 SESSION TOKEN
 ACCESS_TOKEN = None
 
-# 📊 STOCK TOKENS
+# 📊 STOCKS
 stocks = {
     "RELIANCE": 738561,
     "INFY": 408065,
@@ -63,13 +63,12 @@ def callback(request: Request):
 
         kite.set_access_token(ACCESS_TOKEN)
 
-        # 🔁 REDIRECT BACK TO YOUR SITE
         return RedirectResponse("https://stocks.ofesto.com/?login=success")
 
     except Exception as e:
         return {"error": str(e)}
 
-# 📊 STOCK API
+# 📊 STOCK DATA
 @app.get("/stocks")
 def get_stocks():
     global ACCESS_TOKEN
@@ -100,7 +99,7 @@ def get_stocks():
 
                 change = ((latest - old) / old) * 100
 
-                # 📊 SIGNAL LOGIC
+                # 📊 SIGNAL
                 if change > 3:
                     signal = "STRONG BUY"
                     confidence = "High"
@@ -114,8 +113,21 @@ def get_stocks():
                     signal = "AVOID"
                     confidence = "Low"
 
+                # 🎯 TARGET + SL
                 target = latest * 1.03
                 stop_loss = latest * 0.95
+
+                # ⏱️ DAYS LOGIC
+                if change > 6:
+                    days = "1-2 Days ⚡"
+                elif change > 4:
+                    days = "2-3 Days 🚀"
+                elif change > 2:
+                    days = "3-5 Days ⏳"
+                elif change > 1:
+                    days = "5-7 Days 🐢"
+                else:
+                    days = "Slow / Uncertain"
 
                 results.append({
                     "stock": name,
@@ -123,7 +135,7 @@ def get_stocks():
                     "trend": round(change, 2),
                     "target": round(target, 2),
                     "stop_loss": round(stop_loss, 2),
-                    "days": "2-7",
+                    "days": days,
                     "signal": signal,
                     "confidence": confidence
                 })
