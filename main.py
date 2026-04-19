@@ -3,10 +3,10 @@ from fastapi.responses import RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from kiteconnect import KiteConnect
 import datetime
-import random
 
 app = FastAPI()
 
+# CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -15,6 +15,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# 🔑 KEYS
 API_KEY = "v4se78490za52f7m"
 API_SECRET = "hestwv676imoo7wcf443vmj70s7muhzr"
 
@@ -23,23 +24,25 @@ kite = KiteConnect(api_key=API_KEY)
 ACCESS_TOKEN = None
 
 
+# 🔐 LOGIN
 @app.get("/login")
 def login():
     return RedirectResponse(kite.login_url())
 
 
+# 🔁 CALLBACK
 @app.get("/callback")
 def callback(request_token: str = None):
     global ACCESS_TOKEN
 
     data = kite.generate_session(request_token, api_secret=API_SECRET)
     ACCESS_TOKEN = data["access_token"]
-
     kite.set_access_token(ACCESS_TOKEN)
 
     return RedirectResponse("https://stocks.ofesto.com/?login=success")
 
 
+# 📊 STOCK SCANNER
 @app.get("/stocks")
 def get_stocks():
     global ACCESS_TOKEN
@@ -48,13 +51,22 @@ def get_stocks():
         return {"error": "Login required"}
 
     try:
+        # 🔥 MARKET TREND CHECK (NIFTY)
+        nifty = kite.ltp("NSE:NIFTY 50")["NSE:NIFTY 50"]["last_price"]
+
+        # Simple bullish filter (you can improve later)
+        if nifty < 20000:
+            return {"error": "Market weak. No trades today."}
+
         symbols = [
             "NSE:HDFCBANK","NSE:ICICIBANK","NSE:SBIN","NSE:AXISBANK",
             "NSE:INFY","NSE:TCS","NSE:WIPRO",
             "NSE:RELIANCE","NSE:ONGC","NSE:BPCL",
             "NSE:TATAMOTORS","NSE:HEROMOTOCO",
             "NSE:ITC","NSE:DABUR",
-            "NSE:SUNPHARMA","NSE:CIPLA"
+            "NSE:SUNPHARMA","NSE:CIPLA",
+            "NSE:COALINDIA","NSE:NTPC","NSE:POWERGRID",
+            "NSE:INDUSINDBK","NSE:CANBK","NSE:PNB"
         ]
 
         result = []
@@ -66,6 +78,9 @@ def get_stocks():
                 ltp = kite.ltp(symbol)
                 price = ltp[symbol]["last_price"]
 
+                if price > 1500:
+                    continue
+
                 hist = kite.historical_data(
                     ltp[symbol]["instrument_token"],
                     from_date,
@@ -73,30 +88,27 @@ def get_stocks():
                     "day"
                 )
 
-                if len(hist) < 2:
+                if len(hist) < 5:
                     continue
 
-                old_price = hist[0]["close"]
-                latest_price = hist[-1]["close"]
+                closes = [x["close"] for x in hist]
+                highs = [x["high"] for x in hist]
+
+                old_price = closes[0]
+                latest_price = closes[-1]
 
                 change = ((latest_price - old_price) / old_price) * 100
 
-                # 🔥 SMART LOGIC
-                target = latest_price * (1 + random.uniform(0.03, 0.08))
-                stop_loss = latest_price * (1 - random.uniform(0.02, 0.05))
+                # 🔥 STRICT FILTERS
+                breakout = latest_price >= max(highs[:-1])
+                momentum = change > 3
 
-                if change > 5:
-                    signal = "BUY"
-                    confidence = "High"
-                    days = "2-4"
-                elif change > 1:
-                    signal = "BUY (Weak)"
-                    confidence = "Medium"
-                    days = "3-5"
-                else:
-                    signal = "SELL"
-                    confidence = "Low"
-                    days = "-"
+                if not (breakout and momentum):
+                    continue
+
+                # 🎯 TARGET LOGIC (realistic)
+                target = latest_price * 1.05
+                stop_loss = latest_price * 0.97
 
                 result.append({
                     "stock": symbol.replace("NSE:", ""),
@@ -104,9 +116,9 @@ def get_stocks():
                     "trend": round(change, 2),
                     "target": round(target, 2),
                     "stop_loss": round(stop_loss, 2),
-                    "days": days,
-                    "signal": signal,
-                    "confidence": confidence
+                    "days": "2-7",
+                    "signal": "STRONG BUY",
+                    "confidence": "High"
                 })
 
             except:
@@ -114,9 +126,8 @@ def get_stocks():
 
         return {
             "time": str(datetime.datetime.now()),
-            "nifty": round(random.uniform(22000, 22500), 2),
-            "sensex": round(random.uniform(72000, 74000), 2),
-            "data": result
+            "count": len(result),
+            "data": sorted(result, key=lambda x: x["trend"], reverse=True)
         }
 
     except Exception as e:
