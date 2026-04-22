@@ -24,18 +24,24 @@ kite = KiteConnect(api_key=API_KEY)
 # 🔑 SESSION TOKEN
 ACCESS_TOKEN = None
 
-# 📊 STOCKS
+# 📊 50+ STOCKS (NSE LARGE + MID)
 stocks = {
-    "RELIANCE": 738561,
-    "INFY": 408065,
-    "TCS": 2953217,
-    "HDFCBANK": 1333,
-    "ICICIBANK": 4963,
-    "SBIN": 779521,
-    "AXISBANK": 1510401,
-    "ITC": 424961,
-    "ONGC": 633601,
-    "TATAMOTORS": 884737
+    "RELIANCE": 738561, "INFY": 408065, "TCS": 2953217,
+    "HDFCBANK": 1333, "ICICIBANK": 4963, "SBIN": 779521,
+    "AXISBANK": 1510401, "ITC": 424961, "ONGC": 633601,
+    "TATAMOTORS": 884737, "LT": 2939649, "HCLTECH": 1850625,
+    "WIPRO": 969473, "TECHM": 3465729, "SUNPHARMA": 857857,
+    "CIPLA": 177665, "DRREDDY": 225537, "DIVISLAB": 2800641,
+    "BAJFINANCE": 81153, "BAJAJFINSV": 4268801, "KOTAKBANK": 492033,
+    "INDUSINDBK": 1346049, "POWERGRID": 3834113, "NTPC": 2977281,
+    "COALINDIA": 5215745, "ADANIPORTS": 3861249, "ADANIENT": 6401,
+    "TATASTEEL": 895745, "JSWSTEEL": 3001089, "HINDALCO": 348929,
+    "UPL": 2889473, "PIDILITIND": 1102337, "ASIANPAINT": 60417,
+    "NESTLEIND": 4598529, "BRITANNIA": 140033, "MARUTI": 2815745,
+    "EICHERMOT": 232961, "HEROMOTOCO": 345089, "BHARTIARTL": 2714625,
+    "TITAN": 897537, "ULTRACEMCO": 2952193, "SHREECEM": 794369,
+    "GRASIM": 315393, "BPCL": 134657, "IOC": 415745,
+    "GAIL": 4713217, "SIEMENS": 3155969, "ABB": 98049
 }
 
 @app.get("/")
@@ -68,7 +74,7 @@ def callback(request: Request):
     except Exception as e:
         return {"error": str(e)}
 
-# 📊 STOCK DATA
+# 📊 MAIN SCANNER
 @app.get("/stocks")
 def get_stocks():
     global ACCESS_TOKEN
@@ -94,40 +100,62 @@ def get_stocks():
                     continue
 
                 closes = [c["close"] for c in data]
-                latest = closes[-1]
-                old = closes[0]
+                highs = [c["high"] for c in data]
 
+                latest = closes[-1]
+
+                # ❌ FILTER PRICE
+                if latest > 1500:
+                    continue
+
+                old = closes[0]
                 change = ((latest - old) / old) * 100
 
+                # 🔥 BREAKOUT CHECK
+                high_10 = max(highs[:-1])
+                breakout = latest >= high_10 * 0.97
+
+                # 🔥 SCORING SYSTEM
+                score = 0
+
+                if change > 5:
+                    score += 3
+                elif change > 3:
+                    score += 2
+                elif change > 1:
+                    score += 1
+
+                if breakout:
+                    score += 2
+
+                # ❌ REMOVE WEAK STOCKS
+                if score < 2:
+                    continue
+
                 # 📊 SIGNAL
-                if change > 3:
+                if score >= 4:
+                    signal = "TOP PICK 🔥"
+                    confidence = "Very High"
+                elif score == 3:
                     signal = "STRONG BUY"
                     confidence = "High"
-                elif change > 1.5:
+                else:
                     signal = "BUY"
                     confidence = "Medium"
-                elif change > 0:
-                    signal = "WEAK BUY"
-                    confidence = "Low"
-                else:
-                    signal = "AVOID"
-                    confidence = "Low"
 
-                # 🎯 TARGET + SL
-                target = latest * 1.03
+                # 🎯 TARGET / SL
+                target = latest * (1 + change / 100 * 0.5)
                 stop_loss = latest * 0.95
 
-                # ⏱️ DAYS LOGIC
+                # ⏱️ DAYS
                 if change > 6:
                     days = "1-2 Days ⚡"
                 elif change > 4:
                     days = "2-3 Days 🚀"
                 elif change > 2:
                     days = "3-5 Days ⏳"
-                elif change > 1:
-                    days = "5-7 Days 🐢"
                 else:
-                    days = "Slow / Uncertain"
+                    days = "5-7 Days 🐢"
 
                 results.append({
                     "stock": name,
@@ -137,16 +165,18 @@ def get_stocks():
                     "stop_loss": round(stop_loss, 2),
                     "days": days,
                     "signal": signal,
-                    "confidence": confidence
+                    "confidence": confidence,
+                    "score": score
                 })
 
             except Exception as e:
-                print("Stock error:", name, e)
+                print("Error:", name, e)
 
-        if len(results) == 0:
-            return {"error": "NO DATA FROM API"}
+        # 🔥 SORT BEST FIRST
+        results = sorted(results, key=lambda x: (x["score"], x["trend"]), reverse=True)
 
-        results = sorted(results, key=lambda x: x["trend"], reverse=True)
+        # 🔥 LIMIT TO TOP 50
+        results = results[:50]
 
         return {
             "time": str(datetime.now()),
