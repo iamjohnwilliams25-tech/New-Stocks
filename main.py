@@ -105,49 +105,55 @@ def get_stocks():
 
                 latest = closes[-1]
 
-                # ❌ PRICE FILTER
+                # ❌ FILTER PRICE
                 if latest > 1500:
                     continue
 
                 old = closes[0]
                 change = ((latest - old) / old) * 100
 
-                # ❌ REMOVE NEGATIVE / WEAK
-                if change < 2:
-                    continue
-
-                # 🔥 BREAKOUT (near 10-day high)
                 high_10 = max(highs[:-1])
-                breakout = latest >= high_10 * 0.98
+                breakout = latest >= high_10 * 0.97
 
-                if not breakout:
-                    continue
-
-                # 🔥 VOLUME SURGE
                 avg_vol = sum(volumes[:-1]) / len(volumes[:-1])
-                vol_boost = volumes[-1] > avg_vol * 1.2
+                vol_boost = volumes[-1] > avg_vol * 1.1
 
-                # ❌ REMOVE LOW VOLUME
-                if not vol_boost:
+                # 🎯 EXPECTED MOVE (RELAXED)
+                expected_move = change * 1.2
+
+                # ❌ REMOVE ONLY VERY BAD STOCKS
+                if change < 0:
                     continue
 
-                # 🎯 EXPECTED MOVE (STRONG LOGIC)
-                expected_move = change * 1.5
+                # 🔥 SCORING SYSTEM
+                score = 0
 
-                # ❌ ONLY KEEP 5%+ POTENTIAL
-                if expected_move < 5:
-                    continue
+                if change > 5:
+                    score += 3
+                elif change > 3:
+                    score += 2
+                elif change > 1:
+                    score += 1
 
-                # 📊 SIGNAL
-                if expected_move > 8:
+                if breakout:
+                    score += 2
+
+                if vol_boost:
+                    score += 1
+
+                # 📊 CLASSIFICATION
+                if score >= 5:
                     signal = "TOP PICK 🔥"
                     confidence = "Very High"
-                elif expected_move > 6:
+                elif score >= 3:
                     signal = "STRONG BUY"
                     confidence = "High"
-                else:
+                elif score >= 2:
                     signal = "BUY"
                     confidence = "Medium"
+                else:
+                    signal = "WEAK BUY"
+                    confidence = "Low"
 
                 # 🎯 TARGET
                 target = latest * (1 + expected_move / 100)
@@ -156,7 +162,7 @@ def get_stocks():
                 # ⏱️ DAYS
                 if expected_move > 8:
                     days = "1-3 Days ⚡"
-                elif expected_move > 6:
+                elif expected_move > 5:
                     days = "2-4 Days 🚀"
                 else:
                     days = "3-6 Days ⏳"
@@ -170,6 +176,7 @@ def get_stocks():
                     "days": days,
                     "signal": signal,
                     "confidence": confidence,
+                    "score": score,
                     "expected_move": round(expected_move, 2)
                 })
 
@@ -177,15 +184,22 @@ def get_stocks():
                 print("Error:", name, e)
 
         # 🔥 SORT BEST FIRST
-        results = sorted(results, key=lambda x: x["expected_move"], reverse=True)
+        results = sorted(results, key=lambda x: (x["score"], x["trend"]), reverse=True)
 
-        # 🔥 LIMIT
-        results = results[:50]
+        # 🔥 ALWAYS GIVE MORE STOCKS
+        top = [r for r in results if r["score"] >= 4]
+        mid = [r for r in results if 2 <= r["score"] < 4]
+        low = [r for r in results if r["score"] < 2]
+
+        final = top + mid + low
+
+        # LIMIT TO 50
+        final = final[:50]
 
         return {
             "time": str(datetime.now()),
-            "count": len(results),
-            "data": results
+            "count": len(final),
+            "data": final
         }
 
     except Exception as e:
