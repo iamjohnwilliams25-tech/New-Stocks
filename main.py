@@ -75,6 +75,70 @@ def callback(request: Request):
         return {"error": str(e)}
 
 # 📊 MAIN SCANNER
+sector_map = {
+    "RELIANCE": "Energy",
+    "INFY": "IT",
+    "TCS": "IT",
+    "HDFCBANK": "Banking",
+    "ICICIBANK": "Banking",
+    "SBIN": "Banking",
+    "AXISBANK": "Banking",
+    "ITC": "FMCG",
+    "ONGC": "Energy",
+    "TATAMOTORS": "Auto",
+
+    "LT": "Infrastructure",
+    "HCLTECH": "IT",
+    "WIPRO": "IT",
+    "TECHM": "IT",
+
+    "SUNPHARMA": "Pharma",
+    "CIPLA": "Pharma",
+    "DRREDDY": "Pharma",
+
+    "DIVISLAB": "Pharma",
+    "BAJFINANCE": "NBFC",
+    "BAJAJFINSV": "NBFC",
+
+    "KOTAKBANK": "Banking",
+    "INDUSINDBK": "Banking",
+
+    "POWERGRID": "Power",
+    "NTPC": "Power",
+    "COALINDIA": "Energy",
+
+    "ADANIPORTS": "Logistics",
+    "ADANIENT": "Conglomerate",
+
+    "TATASTEEL": "Metal",
+    "JSWSTEEL": "Metal",
+    "HINDALCO": "Metal",
+
+    "UPL": "Agro",
+    "PIDILITIND": "Chemicals",
+
+    "ASIANPAINT": "Paint",
+    "NESTLEIND": "FMCG",
+    "BRITANNIA": "FMCG",
+
+    "MARUTI": "Auto",
+    "EICHERMOT": "Auto",
+    "HEROMOTOCO": "Auto",
+
+    "BHARTIARTL": "Telecom",
+    "TITAN": "Retail",
+
+    "ULTRACEMCO": "Cement",
+    "SHREECEM": "Cement",
+    "GRASIM": "Cement",
+
+    "BPCL": "Energy",
+    "IOC": "Energy",
+    "GAIL": "Energy",
+
+    "SIEMENS": "Industrial",
+    "ABB": "Industrial"
+}
 @app.get("/stocks")
 def get_stocks():
     global ACCESS_TOKEN
